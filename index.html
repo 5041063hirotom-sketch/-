@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Precision Command Battle</title>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html,body{height:100%;margin:0;background:#0d1117;color:#f0f6fc;font-family:'Hiragino Sans','Noto Sans JP',sans-serif;user-select:none;-webkit-user-select:none;touch-action:manipulation}
+#app{max-width:512px;height:100%;margin:0 auto;display:flex;flex-direction:column;background:#0f172a;border:1px solid #334155}
+#target{position:absolute;border-radius:50%;transform:translate(-50%,-50%);border:3px solid #ef4444;background:rgba(239,68,68,.15)}
+#target .in{position:absolute;inset:17%;border-radius:50%;border:2px dashed #f59e0b;background:rgba(245,158,11,.25)}
+#target .bull{position:absolute;inset:33%;border-radius:50%;background:#22c55e;box-shadow:0 0 10px #22c55e}
+.act{animation:p 1.2s infinite ease-in-out}
+@keyframes p{50%{box-shadow:0 0 18px #22d3ee}}
+button:disabled{opacity:.35}
+@keyframes fl{50%{transform:translateY(-4px)}}
+.shk{animation:shk .35s}
+@keyframes shk{20%{transform:translate(-6px,3px)}40%{transform:translate(6px,-3px)}60%{transform:translate(-4px,-2px)}80%{transform:translate(4px,2px)}}
+.fxo{position:absolute;inset:0;pointer-events:none;display:flex;align-items:center;justify-content:center;z-index:5}
+.fxr{position:absolute;inset:0;pointer-events:none;border-radius:12px;animation:fd .5s forwards}
+@keyframes fd{to{opacity:0}}
+.ring{width:20px;height:20px;border-radius:50%;border:4px solid var(--c);box-shadow:0 0 16px var(--c);animation:rg .5s ease-out forwards}
+@keyframes rg{to{transform:scale(5);opacity:0}}
+.slash{position:absolute;width:90px;height:4px;background:linear-gradient(90deg,transparent,#fff,var(--c),transparent);box-shadow:0 0 12px var(--c);animation:sl .3s ease-out both}
+@keyframes sl{0%{transform:rotate(var(--r,-35deg)) scaleX(0)}50%{transform:rotate(var(--r,-35deg)) scaleX(1)}100%{transform:rotate(var(--r,-35deg)) scaleX(1);opacity:0}}
+.beam{position:absolute;top:-90px;width:14px;height:170px;background:linear-gradient(#fff,var(--c));box-shadow:0 0 20px var(--c);transform-origin:top;animation:bm .45s forwards}
+@keyframes bm{from{transform:scaleY(0)}40%{transform:scaleY(1)}to{opacity:0}}
+.fxd{position:absolute;top:0;font-weight:900;color:#fde68a;text-shadow:0 0 8px #000,0 0 12px var(--c);animation:fu 1s forwards;z-index:6;white-space:nowrap}
+@keyframes fu{to{transform:translateY(-40px);opacity:0}}
+.dying{animation:dy .6s .3s forwards}
+@keyframes dy{to{opacity:0;transform:scale(.3) rotate(20deg)}}
+.orbw{position:relative;width:110px;height:110px;display:flex;align-items:center;justify-content:center;margin-bottom:16px}
+.orb{width:80px;height:80px;border-radius:50%;background:radial-gradient(circle at 35% 30%,#fff,var(--c) 45%,#1e1b4b);box-shadow:0 0 40px var(--c),0 0 80px var(--c);animation:orb 1.9s ease-in forwards}
+@keyframes orb{0%{transform:scale(.3)}30%{transform:scale(1)}40%,60%,80%{transform:scale(1) translateX(-5px)}50%,70%,90%{transform:scale(1.1) translateX(5px)}100%{transform:scale(1.6)}}
+.orbring{position:absolute;inset:0;border-radius:50%;border:3px dashed var(--c);animation:spn 1s linear infinite}
+@keyframes spn{to{transform:rotate(360deg)}}
+@keyframes pop{from{transform:scale(0) rotate(-20deg);opacity:0}to{transform:none;opacity:1}}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="hd" class="flex justify-between items-center px-3 py-2 bg-slate-950 border-b border-slate-800 text-sm"></div>
+  <div id="main" class="flex-1 overflow-y-auto"></div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const EL={fire:['火','text-red-400'],water:['水','text-sky-400'],wind:['風','text-green-400'],light:['光','text-yellow-300']};
+const star=r=>'<span class="text-amber-400 text-xs">'+'★'.repeat(r)+'</span>';
+const CH=[
+{id:'kazuma',n:'カズマ',r:3,e:'fire',i:'🧙',hp:480,atk:140,df:35,p:'全ての攻撃が敵全体にヒット',u:['チーム覚醒','次ターン全員ATK+30%','BUFF'],mx:300},
+{id:'blaze',n:'レイジ',r:2,e:'fire',i:'🔥',hp:400,atk:120,df:30,p:'火属性ATK+20%',u:['ターゲット拡大','的が1.5倍になる','BIG'],mx:300},
+{id:'aqua',n:'セリーナ',r:2,e:'water',i:'💧',hp:350,atk:95,df:40,p:'高い防御力',u:['クロノ・スロー','的の速度が半分','SLOW'],mx:300},
+{id:'zephyr',n:'ハヤテ',r:1,e:'wind',i:'🌪️',hp:320,atk:110,df:25,p:'風の機動力',u:['エイムアシスト','中心判定を拡大','BULL'],mx:280},
+{id:'lumia',n:'エレナ',r:1,e:'light',i:'☀️',hp:450,atk:85,df:50,p:'毎ターンHP自動回復',u:['タイムブースト','連射+2秒','TIME'],mx:320},
+{id:'ignis',n:'ヴァルカン',r:2,e:'fire',i:'☄️',hp:500,atk:135,df:20,p:'火属性ATK+20%',u:['爆風領域','的が1.5倍になる','BIG'],mx:350},
+{id:'sylph',n:'ライカ',r:1,e:'wind',i:'🍃',hp:340,atk:105,df:28,p:'風の加護',u:['エイムアシスト','中心判定を拡大','BULL'],mx:280}];
+// [name,rarity,atk,hp,def,icon]
+const GR=[['標準スコープ',1,15,0,0,'🎯'],['簡易アーマー',1,0,120,10,'🛡️'],['小型セル',1,10,60,5,'🔋'],
+['レーザーサイト',2,45,0,15,'👁️'],['チタンプレート',2,0,350,30,'🔰'],['ハイパワーセル',2,30,180,15,'⚡'],
+['フォトンコア',3,90,250,25,'⚛️'],['イージスシステム',3,25,750,60,'🔷'],['超神撃ドライブ',3,120,150,15,'💥']];
+const gd=g=>[g[2]&&'ATK+'+g[2],g[3]&&'HP+'+g[3],g[4]&&'DEF+'+g[4]].filter(Boolean).join(' ');
+const en=(n,h,a,i)=>[n,h,a,i||'🤖'];
+const Q=[
+{id:'m1',t:'main',n:'1-1 静寂の廃都市',exp:200,en:80,co:300,w:[[en('ドローンA',500,35,'🛸'),en('ドローンB',500,35,'🛸')],[en('ガードロボ',900,50),en('ドローンC',500,35,'🛸')],[en('VX-9000',2500,85,'🦾')]]},
+{id:'m2',t:'main',n:'1-2 氷結のデータプラント',exp:450,en:180,co:600,w:[[en('アイスビットα',800,45,'🧊'),en('アイスビットβ',800,45,'🧊')],[en('クリスタルガード',1500,65,'💠'),en('アイスビットγ',800,45,'🧊')],[en('フロスト・ドローン',4000,120,'❄️')]]},
+{id:'m3',t:'main',n:'1-3 暴風の軌道エレベータ',exp:900,en:350,co:1200,w:[[en('スワームA',1000,60,'🐛'),en('スワームB',1000,60,'🐛'),en('スワームC',1000,60,'🐛')],[en('センチネル',2200,90,'🌀'),en('センチネル',2200,90,'🌀')],[en('ストーム要塞X',6500,160,'🏰')]]},
+{id:'e1',t:'energy',n:'エナジー収集 初級',exp:80,en:400,co:200,w:[[en('シーカーA',600,30,'⚡'),en('シーカーB',600,30,'⚡')],[en('オートマトン',2000,60)]]},
+{id:'e2',t:'energy',n:'エナジー収集 上級',exp:150,en:1500,co:500,w:[[en('ガーディアンA',1800,70,'🧱'),en('ガーディアンB',1800,70,'🧱')],[en('マザーコア',7000,150,'🔆')]]},
+{id:'g1',t:'gear',n:'ギア獲得 初級試練',exp:120,en:60,co:300,gp:[.75,.25,0],w:[[en('パトロールA',750,40),en('パトロールB',750,40)],[en('重装ガード',2400,80,'🦿')]]},
+{id:'g2',t:'gear',n:'ギア獲得 上級試練',exp:300,en:120,co:800,gp:[.2,.5,.3],w:[[en('センチネルA',1800,80),en('センチネルB',1800,80)],[en('マスタータイタン',9000,180,'🗿')]]}];
+
+let U={en:300,co:1000,chars:CH.slice(0,4).map(c=>({id:c.id,lv:1,exp:0,sk:1,sh:0})),party:['kazuma','blaze','aqua','zephyr'],gears:[],tr:'kazuma',tab:'main',gm:0,res:null,
+ms:[{t:'クエストを1回クリアする',c:500,p:0,cl:0},{t:'ガチャを1回引く',c:300,p:0,cl:0},{t:'キャラを1回強化する',c:400,p:0,cl:0}]};
+let B=null,R=null,sy=null;
+const M=id=>CH.find(c=>c.id===id),O=id=>U.chars.find(c=>c.id===id);
+function snd(n){try{if(!sy){Tone.start();sy=new Tone.Synth().toDestination()}sy.triggerAttackRelease(n,'16n')}catch(e){}}
+function st(id){const m=M(id),o=O(id),k=1+(o.sk-1)*.1+Math.min(.2,Math.floor(Math.sqrt(o.bd||0))*.02),gi=U.gears.find(x=>x.eq===id),g=gi?GR[gi.g]:null;
+ return{m,o,g,hp:Math.floor(m.hp*(1+(o.lv-1)*.12)*k)+(g?Math.round(g[3]*(1+.1*(gi.lv||0))):0),atk:Math.floor(m.atk*(1+(o.lv-1)*.1)*k)+(g?Math.round(g[2]*(1+.1*(gi.lv||0))):0),df:Math.floor(m.df*(1+(o.lv-1)*.08)*k)+(g?Math.round(g[4]*(1+.1*(gi.lv||0))):0),next:o.lv*100}}
+function addExp(o,x){if(o.lv>=99)return;o.exp+=x;while(o.lv<99&&o.exp>=o.lv*100){o.exp-=o.lv*100;o.lv++}}
+function mp(i){const m=U.ms[i];if(m&&!m.cl)m.p=1}
+
+const V={};
+V.home=()=>`<div class="p-4 space-y-3">
+<div class="text-center bg-slate-950 border border-slate-800 rounded-2xl p-3"><div class="text-xl font-extrabold text-cyan-300 tracking-wider">PRECISION COMMAND</div><div class="text-xs text-slate-400">実力派エイムバトル</div></div>
+<div class="bg-slate-950/60 border border-slate-800 rounded-xl p-2"><div class="flex justify-between text-xs mb-1"><b>編成パーティ</b><button class="text-cyan-400" onclick="show('party')">編集</button></div>
+<div class="grid grid-cols-4 gap-1.5">${U.party.map(id=>{const m=M(id),o=O(id);return`<div class="bg-slate-900 border border-slate-700 rounded-xl p-1.5 text-center"><div>${star(m.r)}</div><div class="text-xl">${m.i}</div><div class="text-[10px] font-bold truncate">${m.n}</div><div class="text-[10px] text-cyan-400">Lv.${o.lv}</div></div>`}).join('')}</div></div>
+<div class="grid grid-cols-2 gap-2 text-xs font-bold">
+<button onclick="show('quest')" class="bg-indigo-900/70 border border-indigo-500/50 rounded-2xl p-4 active:scale-95">🗺️<br>出撃（クエスト）</button>
+<button onclick="show('gacha')" class="bg-amber-900/50 border border-amber-500/60 rounded-2xl p-4 text-amber-200 active:scale-95">💎<br>ガチャ（★3カズマ）</button>
+<button onclick="show('train')" class="bg-slate-900 border border-slate-700 rounded-2xl p-3 active:scale-95">🧬<br>キャラ育成</button>
+<button onclick="show('mission')" class="bg-slate-900 border border-slate-700 rounded-2xl p-3 active:scale-95">📋<br>ミッション</button>
+<button onclick="show('party')" class="bg-slate-900 border border-slate-800 rounded-xl p-2">🛡️ パーティ編成</button>
+<button onclick="help()" class="bg-slate-900 border border-slate-800 rounded-xl p-2">❓ 遊び方</button></div></div>`;
+const back=`<button onclick="show('home')" class="px-2.5 py-1 bg-slate-800 text-xs rounded-lg border border-slate-700">戻る</button>`;
+const head=(t,c)=>`<div class="flex justify-between items-center mb-3"><h2 class="font-bold ${c}">${t}</h2>${back}</div>`;
+
+V.gacha=()=>`<div class="p-4">${head('💎 スカウトガチャ','text-amber-400')}
+<div class="bg-amber-950/50 border border-amber-500/50 rounded-2xl p-3 mb-3"><div class="text-xs text-amber-300 font-bold">PICK UP ★3 ／ 300コイン・1回</div>
+<div class="text-lg font-extrabold text-amber-300">「カズマ」新登場！</div><div class="text-[11px] text-slate-300 mb-2">火属性。攻撃が常に敵全体にヒット。必殺技で全員ATK+30%。</div>
+<div class="flex gap-2"><button onclick="draw(1)" class="flex-1 bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs">1回 (300)</button><button onclick="draw(10)" class="flex-1 bg-orange-600 font-bold py-2.5 rounded-xl text-xs">10連 (3000)</button></div></div>
+<div class="flex justify-around text-center text-[10px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-xl p-2"><div><b class="text-amber-300 block">★3 10%</b>カズマ</div><div><b class="text-indigo-300 block">★2 30%</b></div><div><b class="text-slate-300 block">★1 60%</b></div></div>
+${U.res?`<div class="grid grid-cols-3 gap-2 mt-3">${U.res.map(x=>`<div class="p-2 rounded-xl border bg-slate-900 text-center ${x.m.r==3?'border-amber-400':'border-slate-700'}"><div>${star(x.m.r)}</div><div class="text-xl">${x.m.i}</div><div class="text-xs font-bold truncate">${x.m.n}</div><div class="text-[9px] ${x.dup?'text-amber-300':'text-emerald-400'} font-bold">${x.dup?'欠片+10':'NEW!'}</div></div>`).join('')}</div>`:''}</div>`;
+function draw(n){if(U.co<n*300){alert('コインが足りません！');return}
+ U.co-=n*300;mp(1);U.res=[];
+ for(let i=0;i<n;i++){const r=Math.random()*100,pool=r<10?[M('kazuma')]:r<40?CH.filter(c=>c.r==2):CH.filter(c=>c.r==1);
+  const m=pool[Math.floor(Math.random()*pool.length)];let o=O(m.id),dup=!!o;
+  if(o)o.sh+=10;else U.chars.push({id:m.id,lv:1,exp:0,sk:1,sh:0});U.res.push({m,dup})}
+ show('gacha');gAnim()}
+
+V.mission=()=>`<div class="p-4">${head('📋 デイリーミッション','text-indigo-400')}<div class="space-y-2">${U.ms.map((m,i)=>`<div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl flex justify-between items-center"><div><div class="text-xs font-bold">${m.t}</div><div class="text-[10px] text-amber-400">報酬 🪙${m.c}</div><div class="text-[10px] text-slate-400">進捗 ${m.p}/1</div></div><button onclick="claim(${i})" ${!m.p||m.cl?'disabled':''} class="px-3 py-1.5 rounded-lg text-xs font-bold ${m.p&&!m.cl?'bg-amber-500 text-slate-950':'bg-slate-800'}">${m.cl?'受取済':'受取'}</button></div>`).join('')}</div></div>`;
+function claim(i){const m=U.ms[i];if(m.p&&!m.cl){m.cl=1;U.co+=m.c;snd('E5');show('mission')}}
+
+V.quest=()=>`<div class="p-4">${head('🧭 クエスト選択','text-cyan-400')}
+<div class="flex border-b border-slate-800 mb-3 text-xs">${[['main','メイン'],['energy','エナジー'],['gear','ギア獲得']].map(t=>`<button onclick="U.tab='${t[0]}';show('quest')" class="flex-1 py-2 font-bold border-b-2 ${U.tab==t[0]?'border-cyan-400 text-cyan-400':'border-transparent text-slate-400'}">${t[1]}</button>`).join('')}</div>
+<div class="space-y-2.5">${Q.filter(q=>q.t==U.tab).map(q=>`<div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl flex justify-between items-center"><div><div class="text-xs font-bold">${q.n}</div><div class="text-[10px] text-slate-400">全${q.w.length}WAVE</div><div class="text-[10px] text-cyan-400">EXP+${q.exp} <span class="text-yellow-400">⚡+${q.en}</span> <span class="text-amber-400">🪙+${q.co}</span>${q.gp?' <span class="text-amber-300">⚙ギア</span>':''}</div></div><button onclick="start('${q.id}')" class="bg-cyan-600 text-xs font-bold px-3.5 py-2 rounded-lg active:scale-95">出撃</button></div>`).join('')}</div></div>`;
+
+V.party=()=>`<div class="p-4">${head('🛡️ チーム編成','text-cyan-400')}<p class="text-[11px] text-slate-400 mb-2">最大4人まで（現在 ${U.party.length}人）</p>
+<div class="grid grid-cols-2 gap-2">${U.chars.map(o=>{const m=M(o.id),on=U.party.includes(o.id);return`<div class="p-2.5 rounded-xl border flex justify-between items-center ${on?'bg-slate-900 border-cyan-500/60':'bg-slate-950 border-slate-700'}"><div class="flex items-center gap-2"><span class="text-lg">${m.i}</span><div><div class="text-xs font-bold ${EL[m.e][1]}">${m.n}</div><div class="text-[10px] text-slate-400">Lv.${o.lv}（${EL[m.e][0]}）</div></div></div><button onclick="tp('${o.id}')" class="text-xs font-bold ${on?'text-rose-400':'text-cyan-400'}">${on?'外す':'追加'}</button></div>`}).join('')}</div></div>`;
+function tp(id){if(U.party.includes(id)){if(U.party.length>1)U.party=U.party.filter(x=>x!=id)}else if(U.party.length<4)U.party.push(id);show('party')}
+
+V.train=()=>{const s=st(U.tr),m=s.m,o=s.o,mx=o.lv>=99,cost=o.lv*80,rq=o.sk*10,sm=o.sk>=5,pr=mx?100:Math.floor(o.exp/s.next*100);
+ return`<div class="p-4">${head('🧬 キャラクター強化','text-amber-400')}
+<div class="bg-slate-950/80 border border-slate-800 p-3 rounded-2xl mb-3 space-y-2">
+<div class="flex justify-between"><div><div class="font-bold ${EL[m.e][1]}">${m.i} ${m.n} <span class="text-[10px] bg-amber-950 text-amber-300 border border-amber-500/50 px-1.5 rounded-full">凸Lv.${o.sk}</span></div><div class="text-xs text-cyan-400 font-bold">Lv.${o.lv}/99</div></div><div class="text-[10px] text-slate-400 text-right">パッシブ: ${m.p}<br>必殺: ${m.u[0]}</div></div>
+<div><div class="flex justify-between text-[10px] text-slate-400"><span>EXP</span><span>${mx?'MAX':o.exp+'/'+s.next}</span></div><div class="h-2 bg-slate-950 rounded-full border border-slate-800 overflow-hidden"><div class="h-full bg-cyan-500" style="width:${pr}%"></div></div></div>
+<div class="grid grid-cols-3 text-center bg-slate-900 p-2 rounded-xl text-xs"><div><span class="text-[10px] text-slate-400 block">HP</span><b class="text-emerald-400">${s.hp}</b></div><div><span class="text-[10px] text-slate-400 block">ATK</span><b class="text-rose-400">${s.atk}</b></div><div><span class="text-[10px] text-slate-400 block">DEF</span><b class="text-amber-400">${s.df}</b></div></div>
+<div class="flex justify-between items-center bg-slate-900 border border-amber-500/30 p-2 rounded-xl"><div class="text-xs"><b>${s.g?s.g[5]+' '+s.g[0]:'⚙ ギア未装備'}</b><div class="text-[10px] text-amber-300">${s.g?gd(s.g):''}</div></div><button onclick="U.gm=!U.gm;show('train')" class="px-2.5 py-1 bg-amber-500 text-slate-950 font-bold rounded-lg text-[10px]">変更</button></div>
+${U.gm?`<div class="bg-slate-900 border border-slate-700 rounded-xl p-2 space-y-1.5 max-h-52 overflow-y-auto">${U.gears.length?U.gears.map((g,i)=>{const d=GR[g.g],ot=g.eq&&g.eq!=U.tr;return`<button onclick="eq(${i})" class="w-full p-2 rounded-xl border flex justify-between items-center text-left ${g.eq==U.tr?'border-amber-400 bg-amber-950/50':'border-slate-800 bg-slate-950'}"><span class="text-xs"><b>${d[5]} ${d[0]}</b> ${star(d[1])}<br><span class="text-[10px] text-slate-400">${gd(d)}</span></span><span class="text-[10px] text-slate-400">${g.eq==U.tr?'装備中':ot?M(g.eq).n+'装備':'選択'}</span></button>`}).join(''):'<div class="text-xs text-slate-400 text-center py-3">ギアがありません。ギア獲得クエストで入手！</div>'}<button onclick="uneq()" class="w-full py-1.5 bg-rose-950 border border-rose-800 text-rose-300 rounded-xl text-xs font-bold">装備を外す</button></div>`:''}
+<div class="flex justify-between items-center border-t border-slate-800 pt-2"><div class="text-xs"><span class="text-[10px] text-slate-400 block">レベル強化</span><b class="text-yellow-400">⚡${mx?'MAX':cost}</b></div><button onclick="lvUp()" ${mx||U.en<cost?'disabled':''} class="bg-cyan-600 font-bold px-3.5 py-1.5 rounded-xl text-xs">${mx?'MAX':'レベル強化'}</button></div>
+<div class="flex justify-between items-center bg-slate-900 border border-amber-500/30 p-2 rounded-xl"><div class="text-xs"><b class="text-amber-300">🧩 スキル突破</b><div class="text-[10px] text-slate-400">全ステ+10%</div><b class="text-amber-400">欠片 ${o.sh}/${sm?'MAX':rq}</b></div><button onclick="skUp()" ${sm||o.sh<rq?'disabled':''} class="bg-amber-500 text-slate-950 font-bold px-3.5 py-2 rounded-xl text-xs">${sm?'MAX':'突破'}</button></div></div>
+<div class="grid grid-cols-4 gap-1.5">${U.chars.map(c=>{const mm=M(c.id);return`<button onclick="U.tr='${c.id}';U.gm=0;show('train')" class="p-1.5 rounded-xl border text-center ${c.id==U.tr?'border-amber-400 bg-slate-800':'border-slate-800 bg-slate-900'}"><div class="text-lg">${mm.i}</div><div class="text-[10px] font-bold truncate">${mm.n}</div><div class="text-[9px] text-cyan-400">Lv.${c.lv}</div></button>`}).join('')}</div></div>`};
+function lvUp(){const o=O(U.tr),c=o.lv*80;if(o.lv>=99||U.en<c)return;U.en-=c;addExp(o,o.lv*100);mp(2);snd('G4');show('train')}
+function skUp(){const o=O(U.tr),r=o.sk*10;if(o.sk<5&&o.sh>=r){o.sh-=r;o.sk++;snd('E5');show('train')}}
+function eq(i){U.gears.forEach(g=>{if(g.eq==U.tr)g.eq=null});U.gears[i].eq=U.tr;U.gm=0;show('train')}
+function uneq(){U.gears.forEach(g=>{if(g.eq==U.tr)g.eq=null});U.gm=0;show('train')}
+
+// ---------- BATTLE ----------
+function start(qid){const q=Q.find(x=>x.id==qid);
+ B={q,w:0,turn:1,ai:0,t:0,ult:null,buf:0,used:0,lock:0,log:'',
+ pt:U.party.map(id=>{const s=st(id);return{id,n:s.m.n,i:s.m.i,e:s.m.e,m:s.m,hp:s.hp,mh:s.hp,atk:s.atk,ug:Math.round(s.m.mx*.3)}})};
+ wave(0)}
+function wave(i){B.w=i;B.en=B.q.w[i].map(e=>({n:e[0],hp:e[1],mh:e[1],atk:e[2],i:e[3]}));B.t=0;B.lock=0;B.log=`WAVE ${i+1} 開始！敵が出現！`;show('battle')}
+V.battle=()=>{const a=B.pt[B.ai];const ready=a.ug>=a.m.mx&&!B.used&&!B.lock;
+ return`<div class="p-3 flex flex-col gap-2 h-full">
+<div class="flex justify-between text-[10px] text-cyan-300 font-bold"><span>WAVE ${B.w+1}/${B.q.w.length}</span><span>TURN ${B.turn}</span></div>
+<div class="grid grid-cols-3 gap-1.5">${B.en.map((e,i)=>`<div onclick="tg(${i})" class="p-2 rounded-xl border bg-slate-900 ${e.hp<=0?'opacity-30 border-slate-800':i==B.t?'border-red-500':'border-slate-800'}"><div class="text-[10px] font-bold truncate ${e.hp<=0?'line-through':''}">${i==B.t&&e.hp>0?'🎯':''}${e.n}</div><div class="text-[9px] text-emerald-400">${e.hp}/${e.mh}</div><div class="h-1.5 bg-slate-950 rounded-full overflow-hidden"><div class="h-full bg-rose-500" style="width:${e.hp/e.mh*100}%"></div></div></div>`).join('')}</div>
+<div class="flex-1 min-h-[90px] flex items-center justify-center gap-5">${B.en.map((e,i)=>e.hp>0||(B.fx&&B.fx.t&&B.fx.t.includes(i))?`<div id="es${i}" onclick="tg(${i})" class="relative text-center ${i==B.t?'scale-110':'opacity-70'}"><div class="${e.hp>0?'':'dying'}">${rb(e)}</div></div>`:'').join('')}</div>
+<div class="grid grid-cols-2 gap-2">${B.pt.map((c,i)=>`<div id="pc${i}" class="relative p-2 rounded-xl border bg-slate-950/70 ${c.hp<=0?'opacity-30 border-slate-800':i==B.ai?'border-cyan-400 act':'border-slate-800'}"><div class="flex justify-between text-xs"><b class="${EL[c.e][1]}">${c.i} ${c.n}</b></div><div class="text-[9px] text-emerald-400 text-right">${c.hp}/${c.mh}</div><div class="h-1.5 bg-slate-950 rounded-full overflow-hidden mb-1"><div class="h-full bg-emerald-500" style="width:${c.hp/c.mh*100}%"></div></div><div class="h-1 bg-slate-950 rounded-full overflow-hidden"><div class="h-full bg-purple-500" style="width:${c.ug/c.m.mx*100}%"></div></div></div>`).join('')}</div>
+<div class="bg-slate-950/90 border border-slate-800 p-2 rounded-2xl space-y-2">
+<div class="text-[11px] text-cyan-300 bg-slate-900 border border-slate-800 px-2 py-1 rounded-lg text-center min-h-[24px]">${B.log}</div>
+<div class="flex justify-between items-center bg-indigo-950/40 border border-indigo-500/30 p-1.5 rounded-xl"><div><div class="text-[11px] font-bold text-indigo-300">必殺技: ${a.m.u[0]}</div><div class="text-[9px] text-slate-400">${a.m.u[1]}</div></div><button onclick="ult()" ${ready?'':'disabled'} class="bg-purple-600 font-bold text-xs px-3 py-1.5 rounded-lg ${ready?'act':''}">発動</button></div>
+<div class="grid grid-cols-4 gap-1.5 text-center text-[10px] font-bold">${[['normal','🎯','精密撃'],['snipe','⚡','超・一閃'],['rush','🔥','連射'],['heal','💚','回復']].map(s=>`<button onclick="sel('${s[0]}')" ${B.lock?'disabled':''} class="bg-slate-800 border border-slate-700 p-2 rounded-xl active:scale-95"><div class="text-base">${s[1]}</div>${s[2]}</button>`).join('')}</div></div></div>`};
+function rb(e){const h={m1:20,m2:190,m3:140,e1:50,e2:50,g1:285,g2:285}[B.q.id]||({hw:25,sn:195,sk:330}[B.q.evid])||190,c=`hsl(${h} 95% 60%)`,d=`hsl(${h} 40% 14%)`,boss=e.mh>=2400,dr=/ドローン|ビット|シーカー|スワーム/.test(e.n),w=boss?92:64,S=`stroke="${c}" stroke-width="2.5"`,F=`fill="${d}" ${S}`,A=`<animate attributeName="opacity" values="1;.35;1" dur="1.4s" repeatCount="indefinite"/>`;let b;
+ if(dr)b=`<g ${S} stroke-linecap="round"><path d="M4 18h20M40 18h20M8 46h14M42 46h14M14 18v-6M50 18v-6"/></g><circle cx="32" cy="32" r="15" ${F}/><circle cx="32" cy="32" r="10" fill="none" stroke="${c}" stroke-dasharray="3 3"/><circle cx="32" cy="32" r="5" fill="${c}">${A}</circle>`;
+ else if(boss)b=`<path d="M16 14L10 2M48 14L54 2" ${S}/><rect x="18" y="10" width="28" height="18" rx="4" ${F}/><rect x="22" y="16" width="6" height="5" fill="${c}">${A}</rect><rect x="29" y="16" width="6" height="5" fill="${c}">${A}</rect><rect x="36" y="16" width="6" height="5" fill="${c}">${A}</rect><rect x="12" y="30" width="40" height="22" rx="4" ${F}/><circle cx="32" cy="41" r="6" fill="${c}">${A}</circle><rect x="1" y="28" width="11" height="24" rx="3" ${F}/><rect x="52" y="28" width="11" height="24" rx="3" ${F}/><path d="M4 28V18M60 28V18" ${S}/><rect x="17" y="53" width="10" height="9" ${F}/><rect x="37" y="53" width="10" height="9" ${F}/>`;
+ else b=`<path d="M32 10V4" ${S}/><circle cx="32" cy="4" r="2" fill="${c}"/><rect x="20" y="10" width="24" height="16" rx="4" ${F}/><rect x="24" y="16" width="16" height="4" rx="2" fill="${c}">${A}</rect><rect x="15" y="28" width="34" height="20" rx="3" ${F}/><circle cx="32" cy="38" r="4" fill="${c}">${A}</circle><rect x="6" y="30" width="8" height="16" rx="3" ${F}/><rect x="50" y="30" width="8" height="16" rx="3" ${F}/><rect x="20" y="50" width="8" height="10" ${F}/><rect x="36" y="50" width="8" height="10" ${F}/>`;
+ return`<svg viewBox="0 0 64 64" width="${w}" height="${w}" style="filter:drop-shadow(0 0 8px ${c});animation:fl 2.4s ease-in-out infinite">${b}</svg>`}
+const FC={fire:'#fb923c',water:'#38bdf8',wind:'#4ade80',light:'#fde047'};
+function playFx(){const f=B&&B.fx;if(!f)return;B.fx=null;
+ const add=(p,h)=>{const o=document.createElement('div');o.className='fxo';o.innerHTML=h;p.appendChild(o);setTimeout(()=>o.remove(),1100)};
+ if(f.pt!=null){const p=$('pc'+f.pt);if(p){p.classList.add('shk');add(p,`<div class="fxr" style="background:radial-gradient(circle,#f43f5e99,transparent 70%)"></div><div class="fxd" style="--c:#f43f5e;color:#fecdd3">-${f.d}</div>`)}return}
+ const c=FC[f.e]||'#67e8f9';
+ f.t.forEach((i,k)=>{const s=$('es'+i);if(!s)return;setTimeout(()=>{s.classList.add('shk');let h=`<div class="ring" style="--c:${c}"></div>`;
+  if(f.sk=='snipe')h+=`<div class="beam" style="--c:${c}"></div>`;
+  else if(f.sk=='rush')h+=[0,1,2].map(n=>`<div class="slash" style="--c:${c};--r:${-60+n*30}deg;animation-delay:${n*.12}s"></div>`).join('');
+  else h+=`<div class="slash" style="--c:${c}"></div><div class="slash" style="--c:${c};--r:35deg;animation-delay:.1s"></div>`;
+  h+=`<div class="fxd" style="--c:${c};font-size:${f.cr?26:18}px">${B.wkf>1?'弱点! ':B.wkf<1?'耐性 ':''}${f.cr?'CRITICAL ':''}-${f.d}</div>`;add(s,h)},k*120)})}
+function gAnim(){const mr=Math.max(...U.res.map(x=>x.m.r)),c=['','#22d3ee','#a855f7','#fbbf24'][mr],o=document.createElement('div');
+ o.id='gov';o.style.cssText=`position:fixed;inset:0;z-index:50;background:radial-gradient(circle,#1e1b4b,#020617);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;overflow-y:auto;--c:${c}`;
+ o.innerHTML=`<div class="orbw"><div class="orbring"></div><div class="orb"></div></div><div class="text-sm font-bold animate-pulse" style="color:${c}">SCOUTING...</div>`;
+ document.body.appendChild(o);snd('C4');
+ setTimeout(()=>{o.innerHTML=`<div class="fxr" style="background:#fff;animation:fd .7s forwards"></div><div class="grid ${U.res.length>1?'grid-cols-3':'grid-cols-1 w-32'} gap-2 w-full max-w-sm">${U.res.map((x,i)=>`<div class="p-2 rounded-xl border bg-slate-900 text-center ${x.m.r==3?'border-amber-400':'border-slate-700'}" style="animation:pop .5s ${i*.28}s both;${x.m.r==3?'box-shadow:0 0 24px #fbbf24':x.m.r==2?'box-shadow:0 0 12px #a855f7':''}"><div>${star(x.m.r)}</div><div class="text-2xl">${x.m.i}</div><div class="text-xs font-bold truncate">${x.m.n}</div><div class="text-[9px] font-bold ${x.dup?'text-amber-300':'text-emerald-400'}">${x.dup?'欠片+10':'NEW!'}</div></div>`).join('')}</div><button onclick="document.getElementById('gov').remove();show('gacha')" class="mt-5 bg-slate-800 border border-slate-600 font-bold py-2 px-8 rounded-xl text-sm">確認</button>`;
+  U.res.forEach((x,i)=>setTimeout(()=>snd(['','E4','G4','C6'][x.m.r]),i*280+200))},1900)}
+function tg(i){if(B.en[i].hp>0){B.t=i;show('battle')}}
+function ult(){const a=B.pt[B.ai];if(B.used||a.ug<a.m.mx||B.lock)return;B.used=1;B.ult=a.m.u[2];a.ug=0;if(B.ult=='BUFF')B.buf=2;if(B.ult=='HEAL')B.pt.forEach(c=>{if(c.hp>0)c.hp=Math.min(c.mh,c.hp+Math.round(c.mh*.35))});snd('A5');B.log=`【必殺技】${a.n}の「${a.m.u[0]}」！${a.m.u[1]}`;show('battle')}
+function sel(sk){if(B.lock)return;B.sk=sk;if(B.en[B.t].hp<=0)B.t=B.en.findIndex(e=>e.hp>0);show('aim')}
+
+V.aim=()=>`<div class="p-3 flex flex-col h-full gap-2">
+<div class="bg-slate-900 border border-slate-800 p-2 rounded-xl flex justify-between items-center"><div><div class="text-xs font-bold text-cyan-400">TARGET LOCK</div><div class="text-[10px] text-slate-400">中心の緑を正確にタップ！${B.sk=='rush'?'（連打）':''}</div></div><div id="tm" class="font-extrabold text-yellow-400 bg-slate-950 border border-slate-800 px-2.5 py-1 rounded-lg">${B.sk=='rush'?'':'TAP!'}</div></div>
+<div class="text-[10px] text-center text-purple-300 min-h-[16px]">${B.ult?'ULT: '+B.ult+' ':''}${B.buf>0?'ATK+30%':''}</div>
+<div id="arena" class="relative flex-1 bg-slate-900/60 border-2 border-slate-800 rounded-2xl overflow-hidden" style="touch-action:none"><div id="target"><div class="in"></div><div class="bull"></div></div></div>
+<div class="bg-slate-900 p-2 rounded-xl border border-slate-800 flex justify-between ${B.sk=='rush'?'':'hidden'}"><span class="text-xs text-slate-400">ヒット数</span><b id="hc" class="text-amber-400">0 HITS</b></div></div>`;
+function initAim(){const ar=$('arena'),tgt=$('target');B.hits=0;B.done=0;
+ const sz=B.ult=='BIG'?120:80,r=sz/2;tgt.style.width=tgt.style.height=sz+'px';
+ let W=ar.clientWidth,H=ar.clientHeight,x=W/2,y=H/2,sp=B.sk=='snipe'?7:B.sk=='rush'?5:4;if(B.ult=='SLOW')sp*=.5;
+ let vx=(Math.random()<.5?1:-1)*sp,vy=(Math.random()<.5?1:-1)*sp;
+ if(B.sk=='rush'){let left=B.ult=='TIME'?5:3;$('tm').textContent=left.toFixed(1)+'s';
+  B.rt=setInterval(()=>{left-=.1;if(left<=0){clearInterval(B.rt);fin(B.hits*.4,B.hits+' HITS!')}else $('tm').textContent=left.toFixed(1)+'s'},100)}
+ (function loop(){W=ar.clientWidth;H=ar.clientHeight;x+=vx;y+=vy;if(x-r<=0||x+r>=W)vx*=-1;if(y-r<=0||y+r>=H)vy*=-1;x=Math.min(W-r,Math.max(r,x));y=Math.min(H-r,Math.max(r,y));B.px=x;B.py=y;tgt.style.left=x+'px';tgt.style.top=y+'px';B.af=requestAnimationFrame(loop)})();
+ ar.onpointerdown=e=>{if(B.done)return;const rc=ar.getBoundingClientRect();shot();hole(ar,e.clientX-rc.left,e.clientY-rc.top);if(B.sk!='rush')cancelAnimationFrame(B.af);const d=Math.hypot(e.clientX-rc.left-B.px,e.clientY-rc.top-B.py),br=r*(B.ult=='BULL'?.6:.33);
+  if(B.sk=='rush'){if(d<=r){B.hits++;$('hc').textContent=B.hits+' HITS';snd('G4')}return}
+  B.done=1;let m=.5,t='MISS...';if(d<=br){m=2.8;t='BULLSEYE!!';snd('C6')}else if(d<=r){m=1.5;t='HIT!';snd('G4')}else snd('C3');setTimeout(()=>fin(m,t),550)}}
+function fin(mult,rt){clearInterval(B.rt);cancelAnimationFrame(B.af);B.done=1;const a=B.pt[B.ai];
+ a.ug=Math.min(a.m.mx,a.ug+(mult>=2.5?120:mult>=1.5?100:80)+(a.id=='shigure'&&mult>=2.5?60:0));
+ let atk=a.atk;if(a.e=='fire')atk*=1.2;if(B.buf>0)atk*=1.3;if(B.ult=='DOUBLE')atk*=2;if(B.ult=='INFERNO')atk*=1.8;if(B.ult=='FREEZE')atk*=1.5;if(B.ult=='PRECISE')atk*=1.3;if(a.id=='lim_sk'&&Math.random()<.3)atk*=1.4;if(a.id=='zero'&&mult>=2.5)atk*=1.3;if(a.db&&a.db.k=='ATK')atk*=.7;const wk=WK(a.e,B.q);B.wkf=wk;B.cb=(mult>=1.5&&B.sk!='heal')?(B.cb||0)+1:(B.sk=='heal'?(B.cb||0):0);atk*=wk*(1+Math.min(.5,Math.max(0,B.cb-1)*.1));
+ if(B.sk=='heal'){const h=Math.round(120*mult),t=B.pt.filter(c=>c.hp>0).sort((x,y)=>x.hp-y.hp)[0];t.hp=Math.min(t.mh,t.hp+h);snd('E5');B.log=`${a.n}の回復魔法！[${rt}] ${t.n}を${h}回復`;return after()}
+ let d=B.sk=='normal'?atk*mult:B.sk=='snipe'?atk*(mult>=2.5?3.5:mult>=1.5?2:.3):atk*.3*B.hits;d=Math.round(d);U.st.dmg+=d*(a.id=='kazuma'?B.en.filter(e=>e.hp>0).length:1);if(B.sk!='rush'&&mult>=2.5)U.st.bull++;
+ if(a.id=='kazuma'){B.fx={t:B.en.map((e,i)=>e.hp>0?i:-1).filter(i=>i>=0),d,e:a.e,sk:B.sk,cr:mult>=2.5};B.en.forEach(e=>{if(e.hp>0)e.hp=Math.max(0,e.hp-d)});B.log=`【全体攻撃】${a.n}！敵全員に${d}ダメージ！[${rt}]`}
+ else{const e=B.en[B.t];B.fx={t:[B.t],d,e:a.e,sk:B.sk,cr:mult>=2.5};e.hp=Math.max(0,e.hp-d);B.log=`${a.n}の攻撃！[${rt}] ${e.n}に${d}ダメージ！`}
+ if(B.en.every(e=>e.hp<=0)){B.lock=1;show('battle');
+  if(B.w+1<B.q.w.length)setTimeout(()=>{B.log='WAVE CLEAR！次へ進みます…';show('battle');setTimeout(()=>wave(B.w+1),1200)},800);
+  else setTimeout(win,1000)}else after()}
+function after(){B.ult=null;{const a=B.pt[B.ai];if(a.db&&--a.db.t<=0)a.db=null}const n=B.pt.findIndex((c,i)=>i>B.ai&&c.hp>0);if(n>=0){B.ai=n;show('battle')}else enemyTurn()}
+function enemyTurn(){B.lock=1;B.log='敵のターン！';show('battle');
+ setTimeout(()=>{const le=B.en.filter(e=>e.hp>0),lp=B.pt.filter(c=>c.hp>0);
+  if(le.length&&lp.length){const at=le[Math.floor(Math.random()*le.length)],t=lp[Math.floor(Math.random()*lp.length)],s=st(t.id),d0=Math.round(Math.max(10,at.atk-Math.floor(s.df*.4))*(t.id=='lim_sn'?.75:1)),d=B.bar?0:(at.mh>=2400&&B.turn%3==0)?d0*2:d0;t.hp=Math.max(t.id=='seraph'&&!t.sv&&t.hp-d<=0?(t.sv=1,1):0,t.hp-d);snd('A2');t.ug=Math.min(t.m.mx,t.ug+(d>0?40:0));const dbt=dbRoll(at,t);B.log=`${at.n}の${dbt?dbt[2]:rnd(['攻撃','レーザー射撃','突進','ミサイル'])}！${t.n}に${d}ダメージ！${dbt?' 【'+dbt[1]+'】':''}`;B.fx={pt:B.pt.indexOf(t),d};show('battle');
+   if(B.pt.every(c=>c.hp<=0))return setTimeout(lose,1000)}
+  setTimeout(()=>{B.turn++;B.bar=0;B.used=0;B.pt.forEach(c=>c.uu=0);if(B.buf>0)B.buf--;B.pt.forEach(c=>{if(c.id=='lumia'&&c.hp>0)c.hp=Math.min(c.mh,c.hp+40);if(c.hp>0&&B.pt.some(p=>p.id=='mizuha'&&p.hp>0))c.hp=Math.min(c.mh,c.hp+Math.round(c.mh*.05))});B.ai=B.pt.findIndex(c=>c.hp>0);B.lock=0;B.log='コマンドを選択してください';show('battle')},1100)},1000)}
+function win(){const q=B.q;U.en+=q.en;U.co+=q.co;mp(0);U.st.clr++;U.st.xp+=q.exp;let gear=null;
+ if(q.gp){const r=Math.random(),rar=r<q.gp[2]?3:r<q.gp[2]+q.gp[1]?2:1,ids=GR.map((g,i)=>i).filter(i=>GR[i][1]==rar),gi=ids[Math.floor(Math.random()*ids.length)];U.gears.push({g:gi,eq:null});gear=GR[gi]}
+ const lv=[];U.party.forEach(id=>{const o=O(id),b=o.lv;addExp(o,q.exp);if(o.lv>b)lv.push(`${M(id).n} Lv.${b}→${o.lv}`)});
+ R={win:1,exp:q.exp,en:q.en,co:q.co,gear,lv};snd('C6');show('result')}
+function lose(){R={win:0};snd('C3');show('result')}
+V.result=()=>`<div class="p-6 flex flex-col items-center justify-center h-full text-center gap-3"><div class="text-6xl">${R.win?'🏆':'💀'}</div>
+<h2 class="text-3xl font-extrabold ${R.win?'text-amber-400':'text-rose-500'}">${R.win?'VICTORY':'DEFEAT'}</h2>
+<p class="text-sm text-slate-400">${R.win?'敵の撃破に成功！見事な射撃精度でした。':'部隊が全滅しました。育成して再挑戦しましょう。'}</p>
+${R.win?`<div class="bg-slate-900 border border-slate-800 rounded-xl p-3 text-sm w-full max-w-xs space-y-1"><div class="font-bold text-slate-400 text-xs">獲得報酬</div><div class="flex justify-center gap-3 text-xs font-bold"><span class="text-cyan-400">EXP+${R.exp}</span><span class="text-yellow-400">⚡+${R.en}</span><span class="text-amber-400">🪙+${R.co}</span></div>${R.gear?`<div class="border-t border-slate-800 pt-1 text-xs text-amber-300">⚙ ${R.gear[5]} ${R.gear[0]} ${star(R.gear[1])}<br><span class="text-slate-400">${gd(R.gear)}</span></div>`:''}${R.lv.length?`<div class="border-t border-slate-800 pt-1 text-[11px] text-emerald-400 font-bold">LEVEL UP!<br>${R.lv.join('<br>')}</div>`:''}</div>`:''}
+<button onclick="show('home')" class="bg-cyan-600 font-bold py-3 px-8 rounded-xl active:scale-95">ホームへ戻る</button></div>`;
+function help(){alert('【遊び方】\n1. クエストに出撃してWAVEを進め、ボスを倒そう。\n2. 敵カードをタップで攻撃ターゲットを変更。\n3. 動く的の中心（緑）を狙うほど大ダメージ。\n4. パーティHPはWAVE間で持ち越し。回復魔法も活用しよう。\n5. ギア獲得クエストでギアを集め、キャラ育成で装備しよう。')}
+
+function show(v){if(v!='aim'&&B){clearInterval(B.rt);cancelAnimationFrame(B.af)}
+ $('hd').innerHTML=`<b class="tracking-wider">🎯 REFLEX SQUAD</b><span class="text-xs"><b class="text-yellow-300">⚡${U.en}</b> <b class="text-amber-300 ml-2">🪙${U.co}</b></span>`;
+ if(v=='home'||v=='gacha')U.res=v=='home'?null:U.res;
+ $('main').innerHTML=V[v]();if(v=='aim')initAim();if(v=='battle')playFx()}
+/* ===== v3: デザイン・キャラ・ミッション・弾痕 ===== */
+U.st={dmg:0,clr:0,pulls:0,bull:0,xp:0};U.nm={};U.mt='daily';
+const PAL={fire:['#ef4444','#450a0a','#fca5a5'],water:['#0ea5e9','#082f49','#7dd3fc'],wind:['#22c55e','#052e16','#86efac'],light:['#eab308','#422006','#fde047']};
+CH.push(
+{id:'shigure',n:'シグレ',r:3,e:'wind',hp:420,atk:165,df:30,p:'疾風の剣士。高い攻撃力',u:['ダブルインパクト','次の攻撃ダメージ2倍','DOUBLE'],mx:320},
+{id:'mizuha',n:'ミズハ',r:3,e:'water',hp:520,atk:110,df:55,p:'治療の工兵。高HP・高DEF',u:['リジェネシス','味方全員のHPを35%回復','HEAL'],mx:300},
+{id:'sora',n:'ソラ',r:2,e:'light',hp:430,atk:110,df:42,p:'光の加護',u:['タイムブースト','連射+2秒','TIME'],mx:310},
+{id:'fuka',n:'フウカ',r:2,e:'wind',hp:360,atk:125,df:28,p:'疾風の一撃',u:['エイムアシスト','中心判定を拡大','BULL'],mx:290},
+{id:'minato',n:'ミナト',r:2,e:'water',hp:470,atk:100,df:48,p:'水の守り',u:['クロノ・スロー','的の速度が半分','SLOW'],mx:300});
+function av(c){const [m,d,l]=PAL[c.e],k=[...c.id].reduce((a,x)=>a+x.charCodeAt(0),0),h=k%4,sk=['#fde2c8','#f5c9a0','#e8b690'][k%3],hc=['#2b2b3a','#f4d58d','#e5e7ef','#8b3a62'][(k>>1)%4],
+ bk=[`<path d="M18 30Q16 10 32 10Q48 10 46 30Z" fill="${hc}"/>`,`<path d="M16 30Q14 54 22 60L27 42L37 42L42 60Q50 54 48 30Q46 10 32 10Q18 10 16 30Z" fill="${hc}"/>`,`<circle cx="14" cy="36" r="7" fill="${hc}"/><circle cx="50" cy="36" r="7" fill="${hc}"/><path d="M18 30Q16 10 32 10Q48 10 46 30Z" fill="${hc}"/>`,`<path d="M16 32L12 12L24 18L28 4L34 16L42 5L43 17L53 12L48 32Z" fill="${hc}"/>`][h],
+ ac={fire:`<rect x="19" y="20" width="26" height="3" fill="${m}"/><path d="M45 20l6 3-6 3z" fill="${m}"/>`,water:`<circle cx="42" cy="19" r="3" fill="${l}" stroke="${m}"/>`,wind:`<path d="M18 30Q18 11 32 11Q46 11 46 30" fill="none" stroke="#cbd5e1" stroke-width="2.5"/><rect x="14" y="27" width="6" height="10" rx="2" fill="${m}"/><rect x="44" y="27" width="6" height="10" rx="2" fill="${m}"/>`,light:`<ellipse cx="32" cy="8" rx="10" ry="3" fill="none" stroke="${l}" stroke-width="2"/>`}[c.e],
+ ring=c.r==3?'#fbbf24':c.r==2?'#a78bfa':'#64748b';
+ return`<svg viewBox="0 0 64 64" width="1.5em" height="1.5em" style="vertical-align:middle;border-radius:22%;display:inline-block"><rect width="64" height="64" fill="${d}"/><circle cx="32" cy="22" r="32" fill="${m}" opacity=".55"/>${bk}<path d="M8 64Q10 46 32 44Q54 46 56 64Z" fill="#111827"/><path d="M24 45L32 56L40 45" fill="none" stroke="${m}" stroke-width="3"/><rect x="28" y="38" width="8" height="8" fill="${sk}"/><ellipse cx="32" cy="30" rx="12" ry="13" fill="${sk}"/><ellipse cx="26.5" cy="31" rx="3" ry="3.8" fill="#fff"/><ellipse cx="37.5" cy="31" rx="3" ry="3.8" fill="#fff"/><circle cx="26.5" cy="31.5" r="2.4" fill="${m}"/><circle cx="37.5" cy="31.5" r="2.4" fill="${m}"/><circle cx="26.5" cy="31.5" r="1" fill="#111"/><circle cx="37.5" cy="31.5" r="1" fill="#111"/><circle cx="25.7" cy="30.3" r=".8" fill="#fff"/><circle cx="36.7" cy="30.3" r=".8" fill="#fff"/><path d="M29 38Q32 40 35 38" fill="none" stroke="#9a3412" stroke-width="1.2"/><path d="M19 29Q20 17 32 17Q44 17 45 29Q40 22 32 22Q24 22 19 29Z" fill="${hc}"/>${ac}<rect x="1.5" y="1.5" width="61" height="61" rx="14" fill="none" stroke="${ring}" stroke-width="3"/></svg>`}
+CH.forEach(c=>c.i=av(c));
+// 弾痕・発射音
+let gn=null,gm=null;
+function shot(){if(U.mute)return;try{if(!gn){gn=new Tone.NoiseSynth({noise:{type:'white'},envelope:{attack:.001,decay:.15,sustain:0}}).toDestination();gm=new Tone.MembraneSynth({pitchDecay:.02,octaves:6,envelope:{attack:.001,decay:.2,sustain:0}}).toDestination();gn.volume.value=-4}Tone.start();gn.triggerAttackRelease('16n');gm.triggerAttackRelease('C1','16n')}catch(e){}}
+function hole(ar,x,y){const h=document.createElement('div');h.className='bh';h.style.left=x+'px';h.style.top=y+'px';h.style.transform=`translate(-50%,-50%) rotate(${Math.random()*360}deg)`;ar.appendChild(h);const f=document.createElement('div');f.className='mf';f.style.left=x+'px';f.style.top=y+'px';ar.appendChild(f);setTimeout(()=>f.remove(),160);const hs=ar.querySelectorAll('.bh');if(hs.length>40)hs[0].remove()}
+// ランク
+const RK=()=>1+Math.floor(Math.sqrt(U.st.xp/50)),RP=()=>{const r=RK(),lo=(r-1)*(r-1)*50,hi=r*r*50;return Math.floor((U.st.xp-lo)/(hi-lo)*100)};
+function show(v){if(v!='aim'&&B){clearInterval(B.rt);cancelAnimationFrame(B.af)}
+ $('hd').innerHTML=`<div class="flex items-center gap-2"><div class="rk">${RK()}</div><div><div class="ob text-[9px] text-cyan-300 leading-none mb-0.5">RANK</div><div class="rkb"><i style="width:${RP()}%"></i></div></div></div><div class="flex gap-2 text-xs font-extrabold ob"><span class="chip text-yellow-300">⚡${U.en}</span><span class="chip text-amber-300">🪙${U.co}</span></div>`;
+ if(v=='home'||v=='gacha')U.res=v=='home'?null:U.res;
+ $('main').innerHTML=V[v]();if(v=='aim')initAim();if(v=='battle')playFx()}
+// 通常ミッション
+const NM=[['累計ダメージ','dmg',n=>3000*(n+1)*(n+2)/2,n=>150+100*n,'💥'],['プレイヤーランク','rank',n=>2+n*2,n=>300+150*n,'🎖️'],['クエストクリア回数','clr',n=>3*(n+1),n=>200+100*n,'🗺️'],['ガチャ召喚回数','pulls',n=>5*(n+1),n=>250+100*n,'💎'],['BULLSEYE命中数','bull',n=>5*(n+1),n=>200+100*n,'🎯']];
+const nv=k=>k=='rank'?RK():U.st[k],nok=()=>NM.some((m,i)=>nv(m[1])>=m[2](U.nm[i]||0));
+V.mission=()=>`<div class="p-4">${head('📋 ミッション','text-indigo-400')}<div class="flex border-b border-slate-800 mb-3 text-xs">${[['daily','デイリー'],['normal','通常']].map(t=>`<button onclick="U.mt='${t[0]}';show('mission')" class="flex-1 py-2 font-bold border-b-2 ${U.mt==t[0]?'border-cyan-400 text-cyan-400':'border-transparent text-slate-400'}">${t[1]}${t[0]=='normal'&&nok()?' 🔴':''}</button>`).join('')}</div><div class="space-y-2">${U.mt=='daily'?U.ms.map((m,i)=>`<div class="bg-slate-950/80 border border-slate-800 p-3 rounded-xl flex justify-between items-center"><div><div class="text-xs font-bold">${m.t}</div><div class="text-[10px] text-amber-400">報酸 🪙${m.c}</div></div><button onclick="claim(${i})" ${!m.p||m.cl?'disabled':''} class="px-3 py-1.5 rounded-lg text-xs font-bold ${m.p&&!m.cl?'bg-amber-500 text-slate-950':'bg-slate-800'}">${m.cl?'受取済':'受取'}</button></div>`).join(''):NM.map((m,i)=>{const n=U.nm[i]||0,t=m[2](n),p=nv(m[1]),ok=p>=t;return`<div class="bg-slate-950/80 border ${ok?'border-amber-400':'border-slate-800'} p-3 rounded-xl"><div class="flex justify-between items-center"><div><div class="text-xs font-bold">${m[4]} ${m[0]} <span class="text-[10px] text-cyan-400">Tier ${n+1}</span></div><div class="text-[10px] text-slate-400">目標 ${t.toLocaleString()}　<span class="text-amber-400">🪙${m[3](n)}</span></div></div><button onclick="claimN(${i})" ${ok?'':'disabled'} class="px-3 py-1.5 rounded-lg text-xs font-bold ${ok?'bg-amber-500 text-slate-950':'bg-slate-800'}">受取</button></div><div class="h-1.5 mt-2 bg-slate-950 rounded-full overflow-hidden"><div class="h-full bg-cyan-500" style="width:${Math.min(100,p/t*100)}%"></div></div><div class="text-[9px] text-slate-400 text-right">${p.toLocaleString()} / ${t.toLocaleString()}</div></div>`}).join('')}</div></div>`;
+function claimN(i){const m=NM[i],n=U.nm[i]||0;if(nv(m[1])>=m[2](n)){U.co+=m[3](n);U.nm[i]=n+1;snd('E5');show('mission')}}
+// ガチャ
+V.gacha=()=>`<div class="p-4">${head('💎 スカウトガチャ','text-amber-400')}<div class="bg-amber-950/50 border border-amber-500/50 rounded-2xl p-3 mb-3"><div class="text-xs text-amber-300 font-bold">PICK UP ★3 ／ 300コイン・1回</div><div class="flex gap-2 my-2">${['kazuma','shigure','mizuha'].map(id=>`<div class="text-center flex-1"><div class="text-4xl">${M(id).i}</div><div class="text-[11px] font-bold text-amber-200">${M(id).n}</div><div class="text-[9px] text-slate-400">${EL[M(id).e][0]}${id=='kazuma'?' 確率UP':' NEW'}</div></div>`).join('')}</div><div class="text-[11px] text-slate-300 mb-2">シグレ：次の一撃が2倍　ミズハ：全体回復</div><div class="flex gap-2"><button onclick="draw(1)" class="flex-1 bg-amber-500 text-slate-950 font-bold py-2.5 rounded-xl text-xs">1回 (300)</button><button onclick="draw(10)" class="flex-1 bg-orange-600 font-bold py-2.5 rounded-xl text-xs">10連 (3000)</button></div></div><div class="flex justify-around text-center text-[10px] text-slate-400 bg-slate-950/60 border border-slate-800 rounded-xl p-2"><div><b class="text-amber-300 block">★3 10%</b>カズマ5% 他各2.5%</div><div><b class="text-indigo-300 block">★2 30%</b>6体</div><div><b class="text-slate-300 block">★1 60%</b></div></div>${U.res?`<div class="grid grid-cols-3 gap-2 mt-3">${U.res.map(x=>`<div class="p-2 rounded-xl border bg-slate-900 text-center ${x.m.r==3?'border-amber-400':'border-slate-700'}"><div>${star(x.m.r)}</div><div class="text-2xl">${x.m.i}</div><div class="text-xs font-bold truncate">${x.m.n}</div><div class="text-[9px] ${x.dup?'text-amber-300':'text-emerald-400'} font-bold">${x.dup?'欠片+10':'NEW!'}</div></div>`).join('')}</div>`:''}</div>`;
+function draw(n){if(U.co<n*300){alert('コインが足りません！');return}
+ U.co-=n*300;mp(1);U.st.pulls+=n;U.res=[];
+ for(let i=0;i<n;i++){const r=Math.random()*100;let m;if(r<5)m=M('kazuma');else if(r<10)m=M(Math.random()<.5?'shigure':'mizuha');else{const p=CH.filter(c=>c.r==(r<40?2:1));m=p[Math.floor(Math.random()*p.length)]}
+  const o=O(m.id),dup=!!o;if(o)o.sh+=10;else U.chars.push({id:m.id,lv:1,exp:0,sk:1,sh:0});U.res.push({m,dup})}
+ show('gacha');gAnim()}
+// ホーム
+V.home=()=>{const L=M(U.party[0]),mb=(f,ic,t,s,c)=>`<button onclick="${f}" class="mbtn ${c||''}"><span class="text-2xl">${ic}</span><span class="font-extrabold text-xs">${t}</span><span class="text-[8px] opacity-70 ob">${s}</span></button>`;
+ return`<div class="p-3 space-y-3"><div class="hero"><div class="ob text-[9px] text-cyan-300 tracking-[.3em]">TACTICAL AIM RPG</div><div class="ob text-2xl font-black tracking-wider leading-none title">PRECISION<br>COMMAND</div><div class="hero-ch" style="color:${PAL[L.e][0]}"><div style="font-size:6.3rem;line-height:1">${L.i}</div></div><div class="hero-name"><span class="ob text-[9px] text-amber-300">LEADER</span> <b>${L.n}</b> <span class="text-cyan-300 ob text-xs">Lv.${O(L.id).lv}</span></div></div>
+<div class="grid grid-cols-4 gap-1.5">${U.party.map(id=>{const m=M(id);return`<div class="bg-slate-900 border border-slate-700 rounded-xl p-1 text-center"><div class="text-2xl">${m.i}</div><div class="text-[10px] font-bold truncate">${m.n}</div><div class="text-[9px] text-cyan-400 ob">Lv.${O(id).lv}</div></div>`}).join('')}</div>
+<button onclick="show('quest')" class="sortie"><span class="ob font-black text-lg tracking-widest">SORTIE</span><span class="text-xs font-bold">出撃（クエスト）</span></button>
+<div class="grid grid-cols-4 gap-2">${mb("show('gacha')",'💎','ガチャ','SCOUT','gold')}${mb("show('train')",'🧬','育成','UPGRADE')}${mb("show('mission')",'📋','ミッション','MISSION'+((U.ms.some(m=>m.p&&!m.cl)||nok())?'<i class="dot"></i>':''))}${mb("show('party')",'🛡️','編成','SQUAD')}</div>
+<div class="text-center"><button onclick="help()" class="text-[11px] text-slate-400 underline">❓ 遊び方</button></div></div>`};
+// テーマ（タクティカル・サイバー風）
+{const l=document.createElement('link');l.rel='stylesheet';l.href='https://fonts.googleapis.com/css2?family=Orbitron:wght@600;800;900&display=swap';document.head.appendChild(l)}
+document.head.appendChild(Object.assign(document.createElement('style'),{textContent:`
+.ob{font-family:Orbitron,'Hiragino Sans',sans-serif}
+#app{background:radial-gradient(ellipse at 50% -10%,#1d3a7a77,transparent 60%),repeating-linear-gradient(0deg,#ffffff05 0 1px,transparent 1px 3px),linear-gradient(180deg,#0a1226,#0b1020);border-color:#22d3ee33}
+#hd{background:linear-gradient(90deg,#0a1226,#13204a);border-bottom:2px solid #22d3ee66;padding:6px 10px}
+.rk{width:34px;height:38px;display:flex;align-items:center;justify-content:center;font-family:Orbitron,sans-serif;font-weight:900;color:#1c1917;background:linear-gradient(#fde047,#f59e0b);clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%)}
+.rkb{width:70px;height:5px;background:#0b1226;border:1px solid #22d3ee66}.rkb i{display:block;height:100%;background:linear-gradient(90deg,#22d3ee,#818cf8)}
+.chip{padding:2px 10px;background:#0b1226;border:1px solid #22d3ee55;transform:skewX(-12deg)}
+#main [class*="rounded-2xl"],#main [class*="rounded-xl"]{border-radius:3px 14px 3px 14px}
+#main [class*="bg-slate-9"]{background-image:linear-gradient(135deg,rgba(56,189,248,.08),transparent 60%)}
+#main h2{font-family:Orbitron,'Hiragino Sans',sans-serif;letter-spacing:.05em}
+.hero{position:relative;height:185px;padding:14px;border:1px solid #22d3ee55;overflow:hidden;background:radial-gradient(circle at 78% 45%,#1e3a8aaa,transparent 60%),repeating-linear-gradient(60deg,#ffffff0a 0 1px,transparent 1px 22px),linear-gradient(135deg,#0b1633,#101c3d);clip-path:polygon(0 0,calc(100% - 22px) 0,100% 22px,100% 100%,22px 100%,0 calc(100% - 22px))}
+.hero-ch{position:absolute;right:12px;top:26px;filter:drop-shadow(0 0 14px currentColor)}
+.hero-name{position:absolute;left:14px;bottom:12px;background:#0b1226cc;padding:3px 12px;border-left:3px solid #fbbf24}
+.title{background:linear-gradient(90deg,#67e8f9,#fde68a);-webkit-background-clip:text;background-clip:text;color:transparent;margin-top:6px}
+.sortie{width:100%;display:flex;flex-direction:column;align-items:center;padding:12px;background:linear-gradient(90deg,#f59e0b,#fde047,#f59e0b);color:#1c1917;clip-path:polygon(14px 0,100% 0,calc(100% - 14px) 100%,0 100%)}
+.mbtn{position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:10px 2px;background:linear-gradient(160deg,#1e2b55,#0e1633);border:1px solid #38bdf855;clip-path:polygon(0 0,calc(100% - 10px) 0,100% 10px,100% 100%,10px 100%,0 calc(100% - 10px))}
+.mbtn.gold{background:linear-gradient(160deg,#78350f,#1f1308);color:#fde68a}
+.dot{position:absolute;top:4px;right:6px;width:9px;height:9px;border-radius:50%;background:#ef4444;box-shadow:0 0 8px #ef4444}
+[class*="min-h-[90px]"]{background:radial-gradient(ellipse at 50% 100%,#164e63aa,transparent 70%),repeating-linear-gradient(90deg,rgba(34,211,238,.12) 0 1px,transparent 1px 28px),linear-gradient(#0a1226,#0c2233);border-radius:4px 16px 4px 16px;border:1px solid #22d3ee33}
+#arena{cursor:crosshair;background:repeating-linear-gradient(0deg,rgba(34,211,238,.08) 0 1px,transparent 1px 32px),repeating-linear-gradient(90deg,rgba(34,211,238,.08) 0 1px,transparent 1px 32px),radial-gradient(circle,#10304a,#050b16);box-shadow:inset 0 0 60px #000}
+.bh{position:absolute;width:16px;height:16px;border-radius:50%;background:radial-gradient(circle,#000 0 30%,#1e293b 31% 55%,transparent 56%);box-shadow:0 0 0 1px #64748b66,0 0 6px #000;pointer-events:none;z-index:4}
+.bh::before,.bh::after{content:'';position:absolute;left:50%;top:-6px;width:1px;height:28px;background:#94a3b8aa;transform:rotate(-30deg)}.bh::after{transform:rotate(60deg)}
+.mf{position:absolute;width:44px;height:44px;border-radius:50%;background:radial-gradient(#fff,#fde047 40%,transparent 70%);transform:translate(-50%,-50%);animation:fd .16s forwards;pointer-events:none;z-index:5}
+`}));
+/* ===== v4: セーブ・追加クエスト・イベント・ログイン・掃討・設定 ===== */
+Object.assign(U,{cl:{},md:0,lg:'',sk:0,mute:0,tut:0,shop:0});
+function ovl(h){const o=document.createElement('div');o.style.cssText='position:fixed;inset:0;z-index:60;background:#020617ee;display:flex;align-items:center;justify-content:center;padding:16px;overflow-y:auto';o.innerHTML=`<div class='bg-slate-900 border border-cyan-500/50 rounded-2xl p-4 w-full max-w-xs text-center space-y-3 text-sm'>${h}<button class='bg-cyan-600 font-bold py-2 px-8 rounded-xl text-sm' onclick='this.parentNode.parentNode.remove()'>OK</button></div>`;document.body.appendChild(o)}
+window.alert=m=>ovl(String(m).split(String.fromCharCode(10)).join('<br>'));
+function help(){ovl(`<div class='font-bold text-cyan-300'>遊び方</div><div class='text-xs text-left space-y-1.5'><div>🗺️ クエストで出撃。WAVEを突破してボスを倒そう</div><div>🎯 的の中心(緑)を狙うほど大ダメージ</div><div>★ 全員生存＆て8ターン以内で★　UP。★3にすると「掃討」でバトル無し周回できる</div><div>🎉 イベントは毎週入れ替わり。メダルを集めて交換所へ</div><div>⚔️ 水→火→風→水の順に有利(×1.5)。連続HITでコンボ加算、3ターンごとにボスが大技を放つ</div><div>☠ 敵は攻撃時にデバフを付与：攻撃力ダウン／混乱(的が2つ・片方はダミー)／超高速(必殺で減速可)／縮小</div><div>🎁 毎日ログインでボーナス。データは自動セーブ</div></div>`)}
+window.alert=m=>ovl(String(m).split(String.fromCharCode(10)).join('<br>'));
+function snd(n){if(U.mute)return;try{if(!sy){Tone.start();sy=new Tone.Synth().toDestination()}sy.triggerAttackRelease(n,'16n')}catch(e){}}
+// --- 追加クエスト ---
+const mkq=(id,t,n,s,a,x={})=>{const E=(nm,h,k)=>en(nm,Math.round(s*h),Math.round(s*k));return{id,t,n,exp:Math.round(s*.25),en:Math.round(s*.1),co:Math.round(s*.3),w:[[E(a[0]+'A',.5,.03),E(a[0]+'B',.5,.03)],[E(a[1],.9,.045),E(a[0]+'C',.5,.03)],[E(a[2],3,.08)]],...x}};
+[['m4','2-1 灘熱の溶鉱炉',3500,['ヒートドローン','メルトガード','インフェルノ・コア']],['m5','2-2 深海の研究施設',5000,['アクアビット','ディープセンチネル','リヴァイア・ユニット']],['m6','2-3 嵐の補給基地',7000,['ストームスワーム','サイクロンガード','テンペスト・ギア']],['m7','3-1 光の聖域',10000,['ルミナスビット','ホーリーガード','セラフ・プロトタイプ']],['m8','3-2 虚無の演算塔',14000,['ヴォイドドローン','ロジックガード','アルゴリズム・キング']],['m9','3-3 最終決戦 オーバーロード',20000,['オーバードローン','ラストガード','OVERLORD-Ω']]].forEach(a=>Q.push(mkq(a[0],'main',a[1],a[2],a[3])));
+Q.push(mkq('e3','energy','エナジー収集 超級',12000,['コアドローン','エナジーガード','エナジー・アルタイト'],{en:3000}),mkq('g3','gear','ギア獲得 最上級試練',12000,['プレイトドローン','アーマーガード','ギア・エンペラー'],{gp:[0,.4,.6]}));
+// --- イベント（毎週自動で入れ替え）---
+const EVS=[{id:'hw',n:'ネオン・ハロウィン',ic:'🎃',a:['ゴーストドローン','パンプキンガード','ナイトメア・キング']},{id:'sn',n:'スノー・オペレーション',ic:'❄️',a:['スノウビット','アイスゴーレム','フロスト・キング']},{id:'sk',n:'サクラ・サイバー',ic:'🌸',a:['ペタルドローン','ブロッサムガード','サクラ・マザー']}];
+EVS.forEach(v=>[['初級',3000,30],['上級',8000,60],['超級',18000,120]].forEach((d,k)=>Q.push(mkq('ev_'+v.id+'_'+k,'event',v.n+' '+d[0],d[1],v.a,{evid:v.id,ev:d[2],gp:k==2?[0,.5,.5]:undefined}))));
+const cev=()=>EVS[Math.floor(Date.now()/6048e5)%3],dl=()=>Math.ceil((6048e5-Date.now()%6048e5)/864e5);
+function gg(r){const ids=GR.map((g,i)=>i).filter(i=>GR[i][1]==r);U.gears.push({g:ids[Math.floor(Math.random()*ids.length)],eq:null})}
+const SHOP=[['エナジー+500','⚡',15,()=>U.en+=500],['コイン+1000','🪙',20,()=>U.co+=1000],['欠片+10（育成画面で選択中のキャラ）','🧩',25,()=>{O(U.tr).sh+=10}],['ギア ★2','⚙️',60,()=>gg(2)],['ギア ★3','💠',150,()=>gg(3)]];
+function buy(i){const s=SHOP[i];if(U.md<s[2]){alert('メダルが足りません');return}U.md-=s[2];s[3]();snd('E5');show('quest')}
+function qt(i){U.tab=['main','energy','gear','event'][i];show('quest')}
+function shp(){U.shop=!U.shop;show('quest')}
+function go(k){start(Q[k].id)}
+function sweep(k){R=grant(Q[k],1,3);snd('C6');show('result')}
+function ret(){if(B&&!B.lock){B=null;show('quest')}}
+function sS(){show('set')}
+function tgM(){U.mute=U.mute?0:1;show('set')}
+function rst(b){if(b.dataset.c){try{localStorage.removeItem('pcb1')}catch(e){}location.reload()}else{b.dataset.c=1;b.textContent='もう一度押すと初期化します'}}
+V.quest=()=>{const T=U.tab,mains=Q.filter(q=>q.t=='main'),ev=cev();
+ const card=(q,lk)=>{const s=U.cl[q.id]||0,k=Q.indexOf(q);return`<div class='bg-slate-950/80 border border-slate-800 p-3 rounded-xl flex justify-between items-center ${lk?'opacity-50':''}'><div><div class='text-xs font-bold'>${lk?'🔒 ':''}${q.n} <span class='text-amber-400'>${'★'.repeat(s)}<span class='text-slate-600'>${'★'.repeat(3-s)}</span></span></div><div class='text-[10px] text-slate-400'>全${q.w.length}WAVE・<span class='${pl()>=rec(q)?'text-emerald-300':'text-rose-300'}'>推奨Lv.${rec(q)}</span>${!s&&!lk?'　<span class="text-rose-400">初回ボーナス</span>':''}</div><div class='text-[10px] text-cyan-400'>EXP+${q.exp} <span class='text-yellow-400'>⚡+${q.en}</span> <span class='text-amber-400'>🪙+${q.co}</span>${q.gp?' <span class="text-amber-300">⚙ギア</span>':''}${q.ev?' <span class="text-orange-300">🏅+'+q.ev+'</span>':''}</div></div><div class='flex flex-col gap-1'><button onclick='go(${k})' ${lk?'disabled':''} class='bg-cyan-600 text-xs font-bold px-3.5 py-1.5 rounded-lg'>出撃</button>${s==3?`<button onclick='sweep(${k})' class='bg-emerald-700 text-[10px] font-bold px-2 py-1 rounded-lg'>掃討</button>`:''}</div></div>`};
+ let h;
+ if(T=='main')h=mains.map((q,i)=>{const lk=i>0&&!U.cl[mains[i-1].id];return(i%3==0?`<div class='ob text-[11px] text-cyan-300 mt-1'>CHAPTER ${i/3+1}</div>`:'')+card(q,lk)}).join('');
+ else if(T=='event')h=`<div class='rounded-2xl p-3 border border-orange-400/60 bg-orange-950/40'><div class='font-bold text-sm'>${ev.ic} 期間限定: ${ev.n}</div><div class='text-[10px] text-orange-200'>開催中・残り${dl()}日　🏅所持 ${U.md}</div><button onclick='shp()' class='mt-2 bg-orange-600 text-xs font-bold px-3 py-1.5 rounded-lg'>メダル交換所</button></div>`+(U.shop?`<div class='space-y-1.5'>${SHOP.map((s,i)=>`<div class='bg-slate-950/80 border border-slate-800 p-2 rounded-xl flex justify-between items-center text-xs'><span>${s[1]} ${s[0]}</span><button onclick='buy(${i})' class='bg-amber-500 text-slate-950 font-bold px-3 py-1 rounded-lg'>🏅${s[2]}</button></div>`).join('')}</div>`:'')+Q.filter(q=>q.evid==ev.id).map(q=>card(q,0)).join('');
+ else h=Q.filter(q=>q.t==T).map(q=>card(q,0)).join('');
+ return`<div class='p-4'>${head('🧭 クエスト選択','text-cyan-400')}<div class='flex border-b border-slate-800 mb-3 text-xs'>${['メイン','エナジー','ギア','🎉イベント'].map((t,i)=>`<button onclick='qt(${i})' class='flex-1 py-2 font-bold border-b-2 ${T==['main','energy','gear','event'][i]?'border-cyan-400 text-cyan-400':'border-transparent text-slate-400'}'>${t}</button>`).join('')}</div><div class='space-y-2.5'>${h}</div></div>`};
+// --- 報酸処理（★評価
